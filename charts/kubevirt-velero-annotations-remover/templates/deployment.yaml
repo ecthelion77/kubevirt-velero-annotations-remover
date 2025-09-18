@@ -15,7 +15,12 @@ spec:
       containers:
         - name: webhook
           image: python:3.11-slim
-          command: ["/bin/sh", "-c", "pip install flask && python /app/webhook.py"]
+          command: ["/bin/sh", "-c", "pip install flask watchdog && python /app/webhook.py"]
+          env:
+            - name: CERT_RELOAD_ENABLED
+              value: "{{ .Values.certReload.enabled }}"
+            - name: CERT_RELOAD_INTERVAL
+              value: "{{ .Values.certReload.intervalSeconds }}"
           ports:
             - containerPort: 443
           volumeMounts:
@@ -24,10 +29,31 @@ spec:
               subPath: webhook.py
             - name: tls
               mountPath: /tls
+        - name: cert-watcher
+          image: python:3.11-slim
+          command: ["/bin/sh", "-c", "pip install watchdog && python /watcher/watcher.py"]
+          env:
+            - name: TARGET_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+            - name: watcher-code
+              mountPath: /watcher/watcher.py
+              subPath: watcher.py
       volumes:
         - name: webhook-code
           configMap:
             name: webhook-py
+        - name: watcher-code
+          configMap:
+            name: cert-watcher-py
         - name: tls
           secret:
             secretName: webhook-tls

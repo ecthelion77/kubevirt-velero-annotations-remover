@@ -1,4 +1,7 @@
 service:
   port: 443
+certReload:
+  enabled: true
+  intervalSeconds: 300
 webhook:
   caBundle: ""

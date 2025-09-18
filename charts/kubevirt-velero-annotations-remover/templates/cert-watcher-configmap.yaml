@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cert-watcher-py
+data:
+  watcher.py: |-
+    import os, time, hashlib, subprocess, signal, sys
+    INTERVAL = int(os.getenv('CERT_RELOAD_INTERVAL', '300'))
+    ENABLED = os.getenv('CERT_RELOAD_ENABLED', 'true').lower() == 'true'
+    CERT_FILES = ['/tls/tls.crt', '/tls/tls.key']
+    def file_hash(path):
+        try:
+            with open(path,'rb') as f: return hashlib.sha256(f.read()).hexdigest()
+        except FileNotFoundError:
+            return ''
+    def current_signature():
+        return '|'.join(file_hash(p) for p in CERT_FILES)
+    def main():
+        if not ENABLED:
+            print('cert watcher disabled')
+            while True: time.sleep(3600)
+        sig = current_signature()
+        print('Initial cert signature', sig)
+        while True:
+            time.sleep(INTERVAL)
+            new_sig = current_signature()
+            if new_sig != sig and '' not in new_sig.split('|'):
+                print('Certificate change detected, exiting to trigger pod restart')
+                # Exit -> Kubernetes restarts container/pod based on policy
+                sys.exit(0)
+    if __name__ == '__main__':
+        main()
